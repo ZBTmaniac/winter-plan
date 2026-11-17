@@ -187,6 +187,12 @@ section[hidden]{display:none}
       <label class="field">Run LTHR (bpm) <input id="lthr" type="number" inputmode="numeric"></label>
     </div>
     <div class="card">
+      <h3>Range progression</h3>
+      <label class="field">Runs <select id="runDial"></select></label>
+      <label class="field">Bike / x-train <select id="bikeDial"></select></label>
+      <p class="quiet">Turns each Roche range into one number for the week. Standard: runs sit at the bottom in weeks 1–4, a third of the way up in 5–7, halfway in 9–11; bike sits at 25%, 50%, then 75%. Aerobic weeks (4, 8, 12) drop back. Long runs cap at 16 miles. The full range is always shown in brackets so you can call an audible.</p>
+    </div>
+    <div class="card">
       <h3>Schedule</h3>
       <label class="field">Run club Wednesdays <select id="runclub"><option value="yes">On</option><option value="no">Off</option></select></label>
       <p class="quiet">On: Thursday’s easy run moves to Wednesday run club, and Wednesday’s ride moves to Thursday.</p>
@@ -213,7 +219,7 @@ const store = {
   get(k, d){ try{ const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }catch(e){ return d; } },
   set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
 };
-const DEFAULTS = { bench:190, squat:275, dl:370, row:190, pp:190, hp:135, ftp:215, lthr:171, prog1:'bkk', prog2:'bkk', theme:'auto', runClub:true };
+const DEFAULTS = { bench:190, squat:275, dl:370, row:190, pp:190, hp:135, ftp:215, lthr:171, prog1:'bkk', prog2:'bkk', theme:'auto', runClub:true, runDial:'std', bikeDial:'std' };
 let S = Object.assign({}, DEFAULTS, store.get('settings', {}));
 function save(){ store.set('settings', S); }
 function applyTheme(){ if(S.theme === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', S.theme); }
@@ -353,6 +359,27 @@ const ROCHE = [
    ['B',1,'Easy x-train 1–3 hours','4–6 × 30 s fast near the end.']
  ]}
 ];
+
+/* ---------- range progression ---------- */
+const DIALS = { off:['Off (show full ranges)',0], low:['Conservative',0.5], std:['Standard',1], push:['Push',1.5] };
+const RUN_POS  = [0,0,0,0, .33,.33,.33, 0, .5,.5,.5, 0];
+const BIKE_POS = [.25,.25,.25,.25, .5,.5,.5, .25, .75,.75,.75, .25];
+function rangePos(kind, rw){
+  const d = DIALS[kind === 'R' ? S.runDial : S.bikeDial] || DIALS.std;
+  if (!d[1]) return null;
+  return Math.min(1, (kind === 'R' ? RUN_POS : BIKE_POS)[rw - 1] * d[1]);
+}
+function fmtMin(m){ const h = Math.floor(m / 60), r = m % 60; return h ? h + ' h' + (r ? ' ' + r + ' min' : '') : r + ' min'; }
+function resolveRanges(text, p, kind){
+  if (!text || p === null) return text;
+  const at = (a, b) => a + p * (b - a);
+  const tag = (v, rng) => '<b>' + v + '</b> <span class="opt">(' + rng + ')</span>';
+  return text
+    .replace(/(\d+)–(\d+) miles/g, (m, a, b) => { let v = Math.round(at(+a, +b)); if (kind === 'R') v = Math.min(v, 16); return tag(v + ' miles', a + '–' + b); })
+    .replace(/(\d+)–(\d+) hours/g, (m, a, b) => tag(fmtMin(Math.round(at(+a * 60, +b * 60) / 15) * 15), a + '–' + b + ' h'))
+    .replace(/(\d+)–(\d+) min\b/g, (m, a, b) => tag(Math.round(at(+a, +b) / 5) * 5 + ' min', a + '–' + b))
+    .replace(/(\d+)–(\d+) ×/g, (m, a, b) => tag(Math.round(at(+a, +b)), a + '–' + b) + ' ×');
+}
 
 /* ---------- zone hints ---------- */
 function bikeHint(text, q){
@@ -531,12 +558,14 @@ function render(){
       extra = prog === 'bkk' ? 'Power day: do it before you head out, while you’re fresh.' : '';
     }
     if (S.runClub && di === 3 && kind === 'B') extra = 'Ride first, then lift.';
+    const hintSrc = title + ' ' + detail;
+    if (kind === 'R' || kind === 'B'){ const rp = rangePos(kind, rw); title = resolveRanges(title, rp, kind); detail = resolveRanges(detail, rp, kind); }
     if (kind === 'Z'){
       items.push('<div class="item"><h3>' + title + '</h3><p>' + detail + '</p></div>');
       bars.push('<span class="bar rest"></span>');
     } else {
       const cls = kind === 'R' ? 'run' : 'bike';
-      const hint = kind === 'R' ? runHint(title + ' ' + detail) : bikeHint(title + ' ' + detail, q);
+      const hint = kind === 'R' ? runHint(hintSrc) : bikeHint(hintSrc, q);
       items.push('<div class="item ' + cls + '"><h3>' + title + '</h3>' + (detail ? '<p>' + detail + '</p>' : '') + (extra ? '<p class="opt">' + extra + '</p>' : '') + (hint ? '<p class="hint">' + hint + '</p>' : '') + (kind === 'R' ? warmupDetails() : '') + '</div>');
       bars.push('<span class="bar ' + cls + '" style="height:' + [14,28,44][q] + 'px"></span>');
       dots.push(cls);
@@ -553,7 +582,7 @@ function render(){
       bars.push('<span class="bar lift" style="height:' + (slot === 'P' || deload ? 14 : 36) + 'px"></span>');
       dots.push('lift');
     }
-    const sumParts = [title];
+    const sumParts = [title.replace(/<[^>]+>/g, '')];
     if (slot) sumParts.push((deload ? deloadBlock(prog, slot) : strength(prog, cw, slot, rw)).title);
     days.insertAdjacentHTML('beforeend', dayCard({
       num: date.getDate(), name: DAYNAMES[di], sum: sumParts.join(' + '), dots, open: isToday,
@@ -716,7 +745,8 @@ function renderRef(){
     '<li>Long runs carry the most injury risk; shorter is fine.</li>' +
     '<li>No treadmill? Same number of hill intervals at half the duration (6 × 3 min becomes 6 × 1.5 min).</li>' +
     '<li>With fewer runs, injury risk climbs if intensity creeps. Keep it controlled and default to the easier option when in doubt.</li>' +
-    '<li>Optional doubles are for adding aerobic volume: bike, elliptical, uphill hiking, anything.</li></ul></div>' +
+    '<li>Optional doubles are for adding aerobic volume: bike, elliptical, uphill hiking, anything.</li>' +
+    '<li>Range progression (Settings) picks one number per range. Only move up if the same session last time held HR in zone, the knee and ankle stayed quiet, and HRV was green. Otherwise stay put. Add duration or reps in a session, not both.</li></ul></div>' +
   '<div class="card"><h3>Strength notes</h3><ul>' +
     '<li>Percentages are of your maxes in Settings, rounded to 5 lb.</li>' +
     '<li>Fighter: 3–5 sets, deadlift 1–3 sets. Rest enough to hit every rep. Lifts can be done one at a time or as a circuit.</li>' +
@@ -749,6 +779,7 @@ function renderSettings(){
   });
   $('prog1').onchange = () => { S.prog1 = $('prog1').value; save(); refresh(); };
   $('prog2').onchange = () => { S.prog2 = $('prog2').value; save(); refresh(); };
+  ['runDial','bikeDial'].forEach(id => { $(id).innerHTML = Object.entries(DIALS).map(([k,v]) => '<option value="' + k + '">' + v[0] + '</option>').join(''); $(id).value = S[id]; $(id).onchange = () => { S[id] = $(id).value; save(); refresh(); }; });
   $('theme').value = S.theme;
   $('runclub').value = S.runClub ? 'yes' : 'no';
   $('runclub').onchange = () => { S.runClub = $('runclub').value === 'yes'; save(); refresh(); };

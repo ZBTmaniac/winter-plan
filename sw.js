@@ -1,5 +1,5 @@
 // Bump this version whenever you upload a new index.html
-const CACHE = 'winter-plan-v6';
+const CACHE = 'winter-plan-v7';
 const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

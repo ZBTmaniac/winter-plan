@@ -190,7 +190,7 @@ section[hidden]{display:none}
       <h3>Range progression</h3>
       <label class="field">Runs <select id="runDial"></select></label>
       <label class="field">Bike / x-train <select id="bikeDial"></select></label>
-      <p class="quiet">Turns each Roche range into one number for the week. Standard: runs sit at the bottom in weeks 1–4, a third of the way up in 5–7, halfway in 9–11; bike sits at 25%, 50%, then 75%. Aerobic weeks (4, 8, 12) drop back. Long runs cap at 16 miles. The full range is always shown in brackets so you can call an audible.</p>
+      <p class="quiet">Turns each Roche range into one number for the week. Standard: runs ease from the bottom to 15% over weeks 1–4, sit at 25% in 5–7 and 40% in 9–11; bike sits at 25%, 50%, then 75%. Aerobic weeks (4, 8, 12) drop back. Long runs cap at 16 miles. The full range is always shown in brackets so you can call an audible.</p>
     </div>
     <div class="card">
       <h3>Schedule</h3>
@@ -362,7 +362,7 @@ const ROCHE = [
 
 /* ---------- range progression ---------- */
 const DIALS = { off:['Off (show full ranges)',0], low:['Conservative',0.5], std:['Standard',1], push:['Push',1.5] };
-const RUN_POS  = [0,0,0,0, .33,.33,.33, 0, .5,.5,.5, 0];
+const RUN_POS  = [0,.1,.15,.15, .25,.25,.25, .1, .4,.4,.4, 0];
 const BIKE_POS = [.25,.25,.25,.25, .5,.5,.5, .25, .75,.75,.75, .25];
 function rangePos(kind, rw){
   const d = DIALS[kind === 'R' ? S.runDial : S.bikeDial] || DIALS.std;
